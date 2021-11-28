@@ -49,6 +49,8 @@ handle_option(char *arg)
     sscanf(arg+13,"%d:%d:%d", &ghistoryBits, &lhistoryBits, &pcIndexBits);
   } else if (!strcmp(arg,"--custom")) {
     bpType = CUSTOM;
+  } else if (!strcmp(arg,"--custom1")) {
+    bpType = CUSTOM1;
   } else if (!strcmp(arg,"--verbose")) {
     verbose = 1;
   } else {
@@ -84,7 +86,7 @@ main(int argc, char *argv[])
   stream = stdin;
   bpType = STATIC;
   verbose = 0;
-
+  
   // Process cmdline Arguments
   for (int i = 1; i < argc; ++i) {
     if (!strcmp(argv[i],"--help")) {
@@ -101,7 +103,7 @@ main(int argc, char *argv[])
       stream = fopen(argv[i], "r");
     }
   }
-
+  
   // Initialize the predictor
   init_predictor();
 
