@@ -59,8 +59,15 @@ uint32_t custom_local_hist_mask;
 uint32_t custom_global_hist_mask;
 uint32_t custom_pc_index_mask;
 
-//Custom1
-
+//Custom1 : Tour plus gshare
+uint32_t *tshare_local_ht;
+uint32_t *tshare_local_predt;
+uint32_t *tshare_global_predt;
+uint32_t *tshare_choice_predt;
+uint32_t tshare_ghr;
+uint32_t tshare_local_hist_mask;
+uint32_t tshare_global_hist_mask;
+uint32_t tshare_pc_index_mask;
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
@@ -152,13 +159,41 @@ init_predictor()
             custom_pht[i][j] = 1;
           }
         }
+      case CUSTOM1:
+        ghistoryBits = 13;
+        lhistoryBits = 11;
+        pcIndexBits  = 11;
+        size = 1 << ghistoryBits;
+        local_size = 1 << lhistoryBits;
+        local_hist_size = 1 << pcIndexBits;
 
+        tshare_local_hist_mask = create_mask(lhistoryBits);
+        tshare_global_hist_mask = create_mask(ghistoryBits);
+        tshare_pc_index_mask = create_mask(pcIndexBits);
+
+        tshare_global_predt = (uint32_t*) malloc(size*sizeof(uint32_t));
+        tshare_choice_predt = (uint32_t*) malloc(size*sizeof(uint32_t));
+        tshare_local_predt  = (uint32_t*) malloc(local_size*sizeof(uint32_t));
+        tshare_local_ht     = (uint32_t*) malloc(local_hist_size*sizeof(uint32_t));
+
+        for (int i = 0; i < size;i++){
+          tshare_global_predt[i] = 1;
+        }
+
+        for (int i = 0; i < size;i++){
+          tshare_choice_predt[i] = 1;
+        }
+
+        for (int i = 0; i < local_size;i++){
+          tshare_local_predt[i] = 1;
+        }
+
+        for (int i = 0; i < local_hist_size;i++){
+          tshare_local_ht[i] = 0;
+        }
       default:
         break;
     }
-
-
-
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -192,6 +227,16 @@ make_prediction(uint32_t pc)
   uint32_t custom_pc_pht_index;
   uint32_t custom_pc_bht_index;
   uint32_t custom_ghr_sel;
+
+  // Custom 1
+  uint32_t tshare_pc_index;
+  uint32_t tshare_pc_global_index;
+  uint32_t tshare_choice_index;
+  uint32_t tshare_global_index;
+  uint32_t tshare_local_index;
+  uint32_t tshare_local_prediction;
+  uint32_t tshare_global_prediction;
+  uint32_t tshare_choice_value;
   // Make a prediction based on the bpType
   
   switch (bpType) {
@@ -235,11 +280,27 @@ make_prediction(uint32_t pc)
       custom_pht_sel = local_bht[custom_pc_bht_index] & custom_local_hist_mask;
       //custom_pht_sel = (local_bht[custom_pc_bht_index] & custom_local_hist_mask) ^ (pc & custom_local_hist_mask);
 
-      prediction = custom_pht[custom_pht_sel][custom_pht_index];
+       prediction = custom_pht[custom_pht_sel][custom_pht_index];
 
       if (prediction > 1) return TAKEN;
       else return NOTTAKEN;
+    case CUSTOM1:
+       tshare_pc_index = pc & tshare_pc_index_mask;
+       tshare_pc_global_index = pc & tshare_global_hist_mask;
+       tshare_global_index = (tshare_ghr & tshare_global_hist_mask) ^ tshare_pc_global_index;
+       tshare_choice_index = tshare_global_index;
+       tshare_choice_value = tshare_choice_predt[tshare_choice_index];
 
+       tshare_global_prediction = tshare_global_predt[tshare_global_index];
+
+       tshare_local_index  = tshare_local_ht[tshare_pc_index] & tshare_local_hist_mask;
+       tshare_local_prediction  = tshare_local_predt[tshare_local_index];
+
+       if (tshare_choice_value < 2) prediction = tshare_global_prediction;
+       else prediction = tshare_local_prediction;
+
+       if (prediction > 1) return TAKEN;
+       else return NOTTAKEN;
     default:
       break;
   }
@@ -281,6 +342,18 @@ train_predictor(uint32_t pc, uint8_t outcome)
   uint32_t custom_pc_pht_index;
   uint32_t custom_pc_bht_index;
   uint32_t custom_ghr_sel;
+  
+  // Custom 1
+  uint32_t tshare_pc_index;
+  uint32_t tshare_pc_global_index;
+  uint32_t tshare_choice_index;
+  uint32_t tshare_global_index;
+  uint32_t tshare_local_index;
+  uint32_t tshare_local_prediction;
+  uint32_t tshare_global_prediction;
+  uint32_t tshare_choice_value;
+  uint32_t tshare_local_pred_final;
+  uint32_t tshare_global_pred_final;
 
   switch (bpType) {
       case STATIC:
@@ -357,7 +430,42 @@ train_predictor(uint32_t pc, uint8_t outcome)
           custom_ghr = custom_ghr << 1 | outcome;
           local_bht[custom_pc_bht_index] = ((local_bht[custom_pc_bht_index] << 1) | outcome ) & custom_local_hist_mask;
            
+      case CUSTOM1:
+        tshare_pc_index = pc & tshare_pc_index_mask;
+        tshare_pc_global_index = pc & tshare_global_hist_mask;
+        tshare_global_index = (tshare_ghr & tshare_global_hist_mask) ^ tshare_pc_global_index;
+        tshare_choice_index = tshare_global_index;
+        tshare_choice_value = tshare_choice_predt[tshare_choice_index];
 
+        tshare_global_prediction = tshare_global_predt[tshare_global_index];
+
+        tshare_local_index  = tshare_local_ht[tshare_pc_index] & tshare_local_hist_mask;
+        tshare_local_prediction  = tshare_local_predt[tshare_local_index];
+
+        if (tshare_local_prediction > 1) tshare_local_pred_final = TAKEN;
+          else tshare_local_pred_final = NOTTAKEN;
+
+          if (tshare_global_prediction > 1) tshare_global_pred_final = TAKEN;
+          else tshare_global_pred_final = NOTTAKEN;
+
+          if (outcome == TAKEN){
+            if (tshare_global_prediction != 3) tshare_global_predt[tshare_global_index]++;
+            if (tshare_local_prediction != 3)  tshare_local_predt[tshare_local_index]++;
+          }
+          else {
+            if (tshare_global_prediction != 0) tshare_global_predt[tshare_global_index]--;
+            if (tshare_local_prediction != 0)  tshare_local_predt[tshare_local_index]--;
+          }
+
+          if ((tshare_choice_value > 0) && (tshare_global_pred_final == outcome) && (tshare_local_pred_final != outcome)){
+            tshare_choice_predt[tshare_choice_index]--;
+          }
+          else if((tshare_choice_value < 3) && (tshare_global_pred_final != outcome) && (tshare_local_pred_final == outcome)){
+            tshare_choice_predt[tshare_choice_index]++;
+          }
+
+          tshare_ghr = (tshare_ghr << 1) | outcome;
+          tshare_local_ht[tshare_pc_index] = (tshare_local_ht[tshare_pc_index] << 1) | outcome;
       default:
         break;
     }
