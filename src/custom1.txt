@@ -1,0 +1,38 @@
+Tournament plus Gshare
+========
+========
+INT_1
+Branches:           3771697
+Incorrect:           364902
+Misprediction Rate:   9.675
+========
+========
+INT_2
+Branches:           3755315
+Incorrect:            10244
+Misprediction Rate:   0.273
+========
+========
+FP_1
+Branches:           1546797
+Incorrect:            12744
+Misprediction Rate:   0.824
+========
+========
+FP_2
+Branches:           2422049
+Incorrect:             9374
+Misprediction Rate:   0.387
+========
+========
+MM_1
+Branches:           3014850
+Incorrect:            33762
+Misprediction Rate:   1.120
+========
+========
+MM_2
+Branches:           2563897
+Incorrect:           174930
+Misprediction Rate:   6.823
+========
